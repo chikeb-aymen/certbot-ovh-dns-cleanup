@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: certbot-ovh-dns-cleanup
+  namespace: certbot
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: certbot
+          containers:
+            - name: certbot-ovh
+              image: your-registry.example.com/certbot-ovh-dns-cleanup:latest
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -c
+              args:
+                - >
+                  echo "dns-lexicon version:" &&
+                  python -c "import pkg_resources; print(pkg_resources.get_distribution('dns-lexicon'))" &&
+                  echo "------------ Requesting certificate ---------------";
+                  certbot certonly --dns-ovh --dns-ovh-credentials /root/.ovhapi \
+                    --non-interactive --agree-tos --email you@example.com \
+                    -d example.com -d *.example.com &&
+                  /usr/local/bin/cleanup-ovh-acme-txt.sh example.com || echo "cleanup failed, ignoring"
+              volumeMounts:
+                - name: ovh-keys
+                  mountPath: /root/.ovhapi
+                  subPath: ovhapi
+          volumes:
+            - name: ovh-keys
+              secret:
+                secretName: ovh-keys-dns
